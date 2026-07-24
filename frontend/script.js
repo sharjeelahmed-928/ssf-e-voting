@@ -4,7 +4,7 @@
 
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
   ? "http://localhost:5000/api"
-  : "https://YOUR-BACKEND.onrender.com/api"; // Update after deploying backend to Render
+  : "https://sharjeelssf928.pythonanywhere.com/api"; // Update after deploying backend to Render
 
 const state = {
   token: localStorage.getItem("ssf_token") || null,
