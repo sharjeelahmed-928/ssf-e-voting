@@ -1,0 +1,4 @@
+ssf_id,full_name,cnic,phone_number,email,department,batch
+SSF240001,Ali Raza,3520112345671,03001234567,ali@example.com,Computer Science,2024
+SSF240002,Fatima Khan,3520112345672,03007654321,fatima@example.com,Business Administration,2024
+SSF240003,Bilal Ahmed,3520112345673,03009876543,bilal@example.com,Electrical Engineering,2023

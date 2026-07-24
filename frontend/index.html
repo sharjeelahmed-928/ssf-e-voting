@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SSF E-Voting System</title>
+<meta name="description" content="Shikarpur Shagird Forum — secure online election platform" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css" />
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          gold: '#F5A300',
+          ink: '#111111',
+          lightgold: '#F8E7B0',
+        },
+        fontFamily: {
+          display: ['Poppins', 'sans-serif'],
+          body: ['Inter', 'sans-serif'],
+        }
+      }
+    }
+  }
+</script>
+</head>
+<body class="font-body bg-white text-ink antialiased">
+
+<!-- Loading Screen -->
+<div id="loading-screen" class="fixed inset-0 z-50 bg-ink flex flex-col items-center justify-center gap-4">
+  <div class="w-16 h-16 rounded-full border-4 border-gold border-t-transparent animate-spin"></div>
+  <p class="font-display text-white tracking-widest text-sm">SSF E-VOTING</p>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full px-4 sm:px-0"></div>
+
+<!-- Top navigation (shown post-login) -->
+<header id="app-header" class="hidden bg-ink text-white sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto flex items-center justify-between px-4 py-3">
+    <button id="drawer-toggle" class="md:hidden text-white text-xl"><i class="fa-solid fa-bars"></i></button>
+    <div class="flex items-center gap-2">
+      <img src="ssf-logo.png" alt="SSF Logo" class="w-9 h-9 rounded-full object-cover" />
+      <span class="font-display font-semibold hidden sm:inline">SSF E-Voting</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="header-username" class="text-sm hidden sm:inline"></span>
+      <button id="logout-btn" class="text-sm bg-gold text-ink font-semibold px-3 py-1.5 rounded-full hover:brightness-110 transition">
+        <i class="fa-solid fa-right-from-bracket mr-1"></i>Logout
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="flex">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="hidden fixed md:sticky top-0 md:top-[57px] left-0 h-screen md:h-[calc(100vh-57px)] w-64 bg-ink text-white -translate-x-full md:translate-x-0 transition-transform z-30">
+    <nav class="flex flex-col p-4 gap-1 font-medium" id="sidebar-nav"></nav>
+  </aside>
+  <div id="drawer-overlay" class="hidden fixed inset-0 bg-black/50 z-20 md:hidden"></div>
+
+  <!-- Main content -->
+  <main id="app-main" class="flex-1 min-h-screen"></main>
+</div>
+
+<!-- Footer -->
+<footer id="app-footer" class="bg-ink text-white/80 mt-auto">
+  <div class="max-w-7xl mx-auto px-4 py-8 flex flex-col items-center text-center gap-2">
+    <img src="ssf-logo.png" alt="SSF Logo" class="w-10 h-10 rounded-full object-cover" />
+    <p class="font-display font-semibold text-white">Shikarpur Shagird Forum</p>
+    <p class="text-xs">&copy; <span id="footer-year"></span> SSF E-Voting System. All rights reserved.</p>
+    <p class="text-xs">Developed by Sharjeel Ahmed &middot; Powered by SSF E-Voting System &middot; v1.0</p>
+    <div class="flex gap-4 text-xs mt-1">
+      <a href="#" class="hover:text-gold transition">Privacy Policy</a>
+      <a href="#" class="hover:text-gold transition">Terms of Use</a>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
