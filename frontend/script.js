@@ -758,7 +758,7 @@ async function renderAdminAudit(main) {
       <div class="glass-card overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-ink text-white text-left">
-            <tr><th class="p-3">SSF ID</th><th class="p-3">Name</th><th class="p-3">Department</th><th class="p-3">Activated</th><th class="p-3">Role</th><th class="p-3">Actions</th></tr>
+           <tr><th class="p-3">Time</th><th class="p-3">Actor</th><th class="p-3">Action</th><th class="p-3">Status</th></tr>
           </thead>
           <tbody>
             ${logs.map(l => `
