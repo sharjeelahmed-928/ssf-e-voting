@@ -566,7 +566,8 @@ async function renderAdminElections(main) {
           <select class="input-field !w-auto text-sm" onchange="changeElectionStatus(${e.id}, this.value)">
             ${["draft","upcoming","active","closed","archived"].map(s => `<option value="${s}" ${s === e.status ? "selected" : ""}>${s}</option>`).join("")}
           </select>
-          <button class="text-sm text-gold font-semibold" onclick="manageElectionStructure(${e.id})">Positions &amp; Candidates</button>
+         <button class="text-sm text-gold font-semibold" onclick="manageElectionStructure(${e.id})">Positions &amp; Candidates</button>
+         <button class="text-sm text-red-600 font-semibold" onclick="deleteElection(${e.id})">Delete</button>
         </div>
       </div>
       <div id="structure-${e.id}" class="mt-4 hidden"></div>
@@ -577,6 +578,14 @@ async function changeElectionStatus(id, status) {
   try {
     await api(`/admin/elections/${id}/status`, { method: "POST", body: { status } });
     toast("Election status updated.", "success");
+  } catch (err) { toast(err.message, "error"); }
+}
+async function deleteElection(id) {
+  if (!confirm("Delete this election permanently? This cannot be undone.")) return;
+  try {
+    await api(`/admin/elections/${id}`, { method: "DELETE" });
+    toast("Election deleted.", "success");
+    renderAdminElections(document.getElementById("app-main"));
   } catch (err) { toast(err.message, "error"); }
 }
 
@@ -596,15 +605,18 @@ async function manageElectionStructure(electionId) {
         <button class="btn-gold px-4" onclick="addPosition(${electionId})">Add</button>
       </div>
       <div id="positions-${electionId}" class="space-y-4">
-        ${election.positions.map(p => `
+       ${election.positions.map(p => `
           <div class="bg-white/70 rounded-lg p-4">
-            <p class="font-medium mb-2">${escapeHtml(p.title)}</p>
+            <div class="flex items-center justify-between mb-2">
+              <p class="font-medium">${escapeHtml(p.title)}</p>
+              <button class="text-xs text-red-600 font-semibold" onclick="deletePosition(${p.id}, ${electionId})">Delete Position</button>
+            </div>
             <div class="flex gap-2 mb-2">
               <input id="cand-name-${p.id}" class="input-field text-sm" placeholder="Candidate name" />
               <button class="btn-gold px-4 text-sm" onclick="addCandidate(${p.id}, ${electionId})">Add</button>
             </div>
             <ul class="text-sm text-ink/70 list-disc pl-5">
-              ${p.candidates.map(c => `<li>${escapeHtml(c.full_name)}</li>`).join("") || "<li>No candidates yet</li>"}
+              ${p.candidates.map(c => `<li class="flex items-center justify-between gap-2">${escapeHtml(c.full_name)} <button class="text-xs text-red-600" onclick="deleteCandidate(${c.id}, ${electionId})">Delete</button></li>`).join("") || "<li>No candidates yet</li>"}
             </ul>
           </div>`).join("")}
       </div>
@@ -630,6 +642,25 @@ async function addCandidate(positionId, electionId) {
   try {
     await api(`/admin/positions/${positionId}/candidates`, { method: "POST", body: { full_name } });
     toast("Candidate added.", "success");
+    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
+    manageElectionStructure(electionId);
+  } catch (err) { toast(err.message, "error"); }
+}
+async function deletePosition(positionId, electionId) {
+  if (!confirm("Delete this position and all its candidates?")) return;
+  try {
+    await api(`/admin/positions/${positionId}`, { method: "DELETE" });
+    toast("Position deleted.", "success");
+    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
+    manageElectionStructure(electionId);
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function deleteCandidate(candidateId, electionId) {
+  if (!confirm("Delete this candidate?")) return;
+  try {
+    await api(`/admin/candidates/${candidateId}`, { method: "DELETE" });
+    toast("Candidate deleted.", "success");
     document.getElementById(`structure-${electionId}`).dataset.loaded = "";
     manageElectionStructure(electionId);
   } catch (err) { toast(err.message, "error"); }
