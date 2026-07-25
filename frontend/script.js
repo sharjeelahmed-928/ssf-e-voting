@@ -504,8 +504,13 @@ async function renderResults(main, electionId) {
   if (!id) {
     // Fall back to whichever visible election (own wing or all-wings) is
     // most recent, instead of assuming there's only ever one election.
-    const mine = await api("/elections/mine");
-    const candidate = mine.find(e => e.status === "closed") || mine[0];
+    // Admins aren't necessarily scoped to a single wing, so they need the
+    // full elections list rather than the voter-facing /elections/mine.
+    const isAdmin = state.member && ["admin", "super_admin"].includes(state.member.role);
+    const mine = isAdmin ? await api("/admin/elections") : await api("/elections/mine");
+    // Only fall back to a CLOSED election — results for an election that's
+    // still upcoming/active aren't final and shouldn't be shown as if they were.
+    const candidate = mine.find(e => e.status === "closed");
     if (!candidate) {
       main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">No election results are available.</div>`;
       return;
