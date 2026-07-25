@@ -268,11 +268,11 @@ function renderActivate(main) {
     <section class="max-w-md mx-auto px-4 py-16 w-full">
       <div class="glass-card p-8">
         <h2 class="font-display text-2xl font-bold mb-1">Activate Your Account</h2>
-        <p class="text-sm text-ink/60 mb-6">Enter the SSF ID and CNIC issued by the organization.</p>
+        <p class="text-sm text-ink/60 mb-6">Enter the SSF ID and Phone number issued by the organization.</p>
         <div id="activate-step-1">
           <label class="text-sm font-medium">SSF ID</label>
           <input id="act-ssf-id" class="input-field mt-1 mb-4" placeholder="SSF240001" />
-          <label class="text-sm font-medium">CNIC</label>
+          <label class="text-sm font-medium">Phone number</label>
           <input id="act-cnic" class="input-field mt-1 mb-6" placeholder="0000000000000" />
           <button id="verify-btn" class="btn-gold w-full py-3">Verify</button>
         </div>
@@ -828,7 +828,7 @@ async function renderAdminMembers(main) {
       <div id="add-member-form" class="hidden glass-card p-6 mb-6 grid sm:grid-cols-2 gap-3">
         <input id="m-ssf-id" class="input-field" placeholder="SSF ID (e.g. SSF240010)" />
         <input id="m-name" class="input-field" placeholder="Full name" />
-        <input id="m-cnic" class="input-field" placeholder="CNIC" />
+        <input id="m-cnic" class="input-field" placeholder="Phone number" />
         <input id="m-dept" class="input-field" placeholder="Department" />
         <select id="m-wing" class="input-field sm:col-span-2">
           <option value="">Select a wing…</option>
@@ -924,7 +924,7 @@ async function editMember(memberId) {
   const full_name = prompt("Full name:", m.full_name);
   if (full_name === null) return;
   if (!full_name.trim()) return toast("Name is required.", "error");
-  const cnic = prompt("CNIC:", m.cnic || "");
+  const cnic = prompt("Phone number:", m.cnic || "");
   if (cnic === null) return;
   const department = prompt("Department:", m.department || "");
   if (department === null) return;
