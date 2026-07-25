@@ -273,7 +273,7 @@ function renderActivate(main) {
           <label class="text-sm font-medium">SSF ID</label>
           <input id="act-ssf-id" class="input-field mt-1 mb-4" placeholder="SSF240001" />
           <label class="text-sm font-medium">Phone number</label>
-          <input id="act-cnic" class="input-field mt-1 mb-6" placeholder="0000000000000" />
+          <input id="act-cnic" class="input-field mt-1 mb-6" placeholder="03XXXXXXXXX" />
           <button id="verify-btn" class="btn-gold w-full py-3">Verify</button>
         </div>
         <div id="activate-step-2" class="hidden"></div>
