@@ -97,6 +97,7 @@ const routes = {
   results: renderResults,
   "admin-elections": renderAdminElections,
   "admin-members": renderAdminMembers,
+  "admin-wings": renderAdminWings,
   "admin-audit": renderAdminAudit,
   profile: renderProfile,
 };
@@ -152,6 +153,7 @@ function renderSidebar(activeRoute) {
     links.push(
       { route: "admin-elections", label: "Elections", icon: "fa-boxes-stacked" },
       { route: "admin-members", label: "Voters", icon: "fa-users" },
+      { route: "admin-wings", label: "Wings", icon: "fa-people-group" },
       { route: "admin-audit", label: "Audit Logs", icon: "fa-list-check" },
     );
   }
@@ -162,6 +164,28 @@ function renderSidebar(activeRoute) {
     </a>`).join("");
 }
 
+/* ---------------------------- Shared: wing helpers ---------------------------- */
+
+let _wingsCache = null;
+
+async function fetchWings(forceRefresh = false) {
+  if (_wingsCache && !forceRefresh) return _wingsCache;
+  _wingsCache = await api("/admin/wings");
+  return _wingsCache;
+}
+
+function wingScopeOptionsHtml(wings, selectedWingId, selectedIsAllWings) {
+  const allSelected = selectedIsAllWings ? "selected" : "";
+  const wingOptions = wings.map(w => `
+    <option value="${w.id}" ${!selectedIsAllWings && String(selectedWingId) === String(w.id) ? "selected" : ""}>${escapeHtml(w.name)}</option>
+  `).join("");
+  return `
+    <option value="">Select a wing…</option>
+    ${wingOptions}
+    <option value="all" ${allSelected}>Both / All Wings</option>
+  `;
+}
+
 /* ---------------------------- Views: Home / Auth ---------------------------- */
 
 async function renderHome(main) {
@@ -169,14 +193,9 @@ async function renderHome(main) {
   main.innerHTML = `
     <section class="bg-ink text-white">
       <div class="max-w-5xl mx-auto px-4 py-20 text-center">
-      <img src="ssf-logo.png" alt="SSF Logo" class="w-16 h-16 mx-auto rounded-full object-cover mb-6" />
+       <img src="ssf-logo.png" alt="SSF Logo" class="w-16 h-16 mx-auto rounded-full object-cover mb-6" />
         <h1 class="font-display text-3xl sm:text-5xl font-extrabold mb-3">Shikarpur Shagird Forum</h1>
         <p class="text-white/70 max-w-xl mx-auto mb-8">A secure, transparent, and modern platform for SSF elections — cast your vote from anywhere.</p>
-        <div class="flex flex-wrap items-center justify-center gap-4 mb-10">
-          <a href="#login" class="btn-gold px-6 py-3 rounded-full font-semibold">Login</a>
-          <a href="#activate" class="px-6 py-3 rounded-full border-2 border-gold text-gold font-semibold hover:bg-gold hover:text-ink transition">Activate Your Account</a>
-          <a href="#login" class="px-6 py-3 rounded-full bg-white/10 text-white font-semibold hover:bg-white/20 transition">Admin Login</a>
-        </div>
         <div id="election-banner">${electionBlock}</div>
       </div>
     </section>
@@ -188,6 +207,9 @@ async function renderHome(main) {
   `;
 
   try {
+    // Note: /elections/public only ever returns an "all wings" election.
+    // Wing-specific elections are intentionally invisible to anonymous
+    // visitors and only appear once a member logs in (see renderDashboard).
     const data = await api("/elections/public");
     const banner = document.getElementById("election-banner");
     if (!data.election) {
@@ -362,45 +384,26 @@ function renderLogin(main) {
 /* ---------------------------- Views: Member ---------------------------- */
 
 async function renderDashboard(main) {
-  const data = await api("/elections/public");
+  // Uses /elections/mine (wing-filtered server-side) instead of the single
+  // "latest election" lookup, since different wings can now have their own
+  // elections running at the same time.
+  const elections = await api("/elections/mine");
   main.innerHTML = `
     <section class="max-w-4xl mx-auto px-4 py-10 w-full">
       <h2 class="font-display text-2xl font-bold mb-6">Welcome, ${escapeHtml(state.member.full_name)}</h2>
-      <div id="dash-content"></div>
+      <div id="dash-content" class="space-y-4"></div>
     </section>`;
   const content = document.getElementById("dash-content");
-  if (!data.election) {
-    try {
-        const latest = await api("/elections/latest-closed");
-
-        if (latest.election) {
-            content.innerHTML = `
-            <div class="glass-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <p class="font-display font-semibold text-lg">${escapeHtml(latest.election.title)}</p>
-                    <p class="text-sm text-ink/60">Election Closed</p>
-                </div>
-                <button class="btn-gold px-6 py-2.5"
-                    onclick="navigate('results',{id:${latest.election.id}})">
-                    View Results
-                </button>
-            </div>`;
-            return;
-        }
-    } catch (_) {}
-
-    content.innerHTML = `<div class="glass-card p-8 text-center text-ink/60">
-        No active election is available right now.
-    </div>`;
+  if (!elections.length) {
+    content.innerHTML = `<div class="glass-card p-8 text-center text-ink/60">No active election is available right now.</div>`;
     return;
-}
-  const e = data.election;
-  const statusLabel = { active: "Voting Open", upcoming: "Upcoming", closed: "Election has ended." }[e.status] || e.status;
-  content.innerHTML = `
+  }
+  const statusLabel = { active: "Voting Open", upcoming: "Upcoming", closed: "Election has ended." };
+  content.innerHTML = elections.map(e => `
     <div class="glass-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <p class="font-display font-semibold text-lg">${escapeHtml(e.title)}</p>
-        <p class="text-sm text-ink/60">${escapeHtml(statusLabel)}</p>
+        <p class="text-sm text-ink/60">${escapeHtml(statusLabel[e.status] || e.status)}</p>
       </div>
       ${e.status === "active"
         ? `<button class="btn-gold px-6 py-2.5" onclick="navigate('vote', {id:${e.id}})">Cast Your Vote</button>`
@@ -408,7 +411,7 @@ async function renderDashboard(main) {
         ? `<button class="btn-gold px-6 py-2.5" onclick="navigate('results', {id:${e.id}})">View Results</button>`
         : `<span class="text-sm text-ink/50">Not open yet</span>`
       }
-    </div>`;
+    </div>`).join("");
 }
 
 async function renderVote(main, electionId) {
@@ -490,15 +493,16 @@ async function renderResults(main, electionId) {
   main.innerHTML = `<div class="max-w-4xl mx-auto px-4 py-10 w-full"><div class="skeleton h-64 w-full"></div></div>`;
   let id = electionId;
   if (!id) {
-  const latest = await api("/elections/latest-closed");
-
-  if (!latest.election) {
-    main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">No election results are available.</div>`;
-    return;
+    // Fall back to whichever visible election (own wing or all-wings) is
+    // most recent, instead of assuming there's only ever one election.
+    const mine = await api("/elections/mine");
+    const candidate = mine.find(e => e.status === "closed") || mine[0];
+    if (!candidate) {
+      main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">No election results are available.</div>`;
+      return;
+    }
+    id = candidate.id;
   }
-
-  id = latest.election.id;
-}
   let data;
   try {
     data = await api(`/elections/${id}/results`);
@@ -544,6 +548,7 @@ async function renderProfile(main) {
       <div class="glass-card p-6 space-y-3 text-sm">
         <div class="flex justify-between"><span class="text-ink/50">SSF ID</span><span class="font-medium">${escapeHtml(state.member.ssf_id)}</span></div>
         <div class="flex justify-between"><span class="text-ink/50">Full Name</span><span class="font-medium">${escapeHtml(state.member.full_name)}</span></div>
+        <div class="flex justify-between"><span class="text-ink/50">Wing</span><span class="font-medium">${escapeHtml(state.member.wing_name || "—")}</span></div>
         <div class="flex justify-between"><span class="text-ink/50">Department</span><span class="font-medium">${escapeHtml(state.member.department || "—")}</span></div>
         <div class="flex justify-between"><span class="text-ink/50">Role</span><span class="font-medium capitalize">${escapeHtml(state.member.role)}</span></div>
       </div>
@@ -553,20 +558,61 @@ async function renderProfile(main) {
 /* ---------------------------- Views: Admin ---------------------------- */
 
 async function renderAdminElections(main) {
-  const elections = await api("/admin/elections");
+  const [elections, wings] = await Promise.all([api("/admin/elections"), fetchWings()]);
+
   main.innerHTML = `
     <section class="max-w-5xl mx-auto px-4 py-10 w-full">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h2 class="font-display text-2xl font-bold">Manage Elections</h2>
-        <button id="new-election-btn" class="btn-gold px-5 py-2.5"><i class="fa-solid fa-plus mr-1"></i>New Election</button>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-ink/60">Filter by wing</label>
+          <select id="election-wing-filter" class="input-field !w-auto text-sm">
+            <option value="">All</option>
+            ${wings.map(w => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join("")}
+          </select>
+          <button id="new-election-btn" class="btn-gold px-5 py-2.5"><i class="fa-solid fa-plus mr-1"></i>New Election</button>
+        </div>
       </div>
       <div id="new-election-form" class="hidden glass-card p-6 mb-6">
         <input id="new-election-title" class="input-field mb-3" placeholder="Election title" />
         <textarea id="new-election-desc" class="input-field mb-3" placeholder="Description (optional)"></textarea>
+        <label class="text-sm font-medium">Wing</label>
+        <select id="new-election-wing" class="input-field mb-3">
+          ${wingScopeOptionsHtml(wings, null, false)}
+        </select>
         <button id="create-election-btn" class="btn-gold px-6 py-2.5">Create</button>
       </div>
       <div class="space-y-4" id="elections-list"></div>
     </section>`;
+
+  function renderList(list) {
+    document.getElementById("elections-list").innerHTML = list.map(e => `
+      <div class="glass-card p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="font-display font-semibold">${escapeHtml(e.title)}</p>
+            <p class="text-xs text-ink/50 uppercase tracking-wide">${escapeHtml(e.status)} &middot; ${escapeHtml(e.is_all_wings ? "All Wings" : (e.wing_name || "No wing assigned"))}</p>
+          </div>
+          <div class="flex gap-2 flex-wrap items-center">
+            <select class="input-field !w-auto text-sm" onchange="changeElectionWingScope(${e.id}, this.value)">
+              ${wingScopeOptionsHtml(wings, e.wing_id, e.is_all_wings)}
+            </select>
+            <select class="input-field !w-auto text-sm" onchange="changeElectionStatus(${e.id}, this.value)">
+              ${["draft","upcoming","active","closed","archived"].map(s => `<option value="${s}" ${s === e.status ? "selected" : ""}>${s}</option>`).join("")}
+            </select>
+            <button class="text-sm text-gold font-semibold" onclick="manageElectionStructure(${e.id})">Positions &amp; Candidates</button>
+          </div>
+        </div>
+        <div id="structure-${e.id}" class="mt-4 hidden"></div>
+      </div>`).join("") || `<p class="text-ink/50 text-center py-10">No elections yet. Create one to get started.</p>`;
+  }
+  renderList(elections);
+
+  document.getElementById("election-wing-filter").addEventListener("change", async (e) => {
+    const wingId = e.target.value;
+    const filtered = await api(`/admin/elections${wingId ? `?wing_id=${wingId}` : ""}`);
+    renderList(filtered);
+  });
 
   document.getElementById("new-election-btn").addEventListener("click", () => {
     document.getElementById("new-election-form").classList.toggle("hidden");
@@ -574,32 +620,17 @@ async function renderAdminElections(main) {
   document.getElementById("create-election-btn").addEventListener("click", async () => {
     const title = document.getElementById("new-election-title").value.trim();
     const description = document.getElementById("new-election-desc").value.trim();
+    const wingValue = document.getElementById("new-election-wing").value;
     if (!title) return toast("Election title is required.", "error");
+    if (!wingValue) return toast("Please select a wing, or Both / All Wings.", "error");
+    const body = { title, description };
+    if (wingValue === "all") { body.is_all_wings = true; } else { body.is_all_wings = false; body.wing_id = Number(wingValue); }
     try {
-      await api("/admin/elections", { method: "POST", body: { title, description } });
+      await api("/admin/elections", { method: "POST", body });
       toast("Election created.", "success");
       renderAdminElections(main);
     } catch (err) { toast(err.message, "error"); }
   });
-
-  const list = document.getElementById("elections-list");
-  list.innerHTML = elections.map(e => `
-    <div class="glass-card p-5">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="font-display font-semibold">${escapeHtml(e.title)}</p>
-          <p class="text-xs text-ink/50 uppercase tracking-wide">${escapeHtml(e.status)}</p>
-        </div>
-        <div class="flex gap-2 flex-wrap">
-          <select class="input-field !w-auto text-sm" onchange="changeElectionStatus(${e.id}, this.value)">
-            ${["draft","upcoming","active","closed","archived"].map(s => `<option value="${s}" ${s === e.status ? "selected" : ""}>${s}</option>`).join("")}
-          </select>
-         <button class="text-sm text-gold font-semibold" onclick="manageElectionStructure(${e.id})">Positions &amp; Candidates</button>
-         <button class="text-sm text-red-600 font-semibold" onclick="deleteElection(${e.id})">Delete</button>
-        </div>
-      </div>
-      <div id="structure-${e.id}" class="mt-4 hidden"></div>
-    </div>`).join("") || `<p class="text-ink/50 text-center py-10">No elections yet. Create one to get started.</p>`;
 }
 
 async function changeElectionStatus(id, status) {
@@ -608,12 +639,13 @@ async function changeElectionStatus(id, status) {
     toast("Election status updated.", "success");
   } catch (err) { toast(err.message, "error"); }
 }
-async function deleteElection(id) {
-  if (!confirm("Delete this election permanently? This cannot be undone.")) return;
+
+async function changeElectionWingScope(id, wingValue) {
+  if (!wingValue) return;
+  const body = wingValue === "all" ? { is_all_wings: true } : { is_all_wings: false, wing_id: Number(wingValue) };
   try {
-    await api(`/admin/elections/${id}`, { method: "DELETE" });
-    toast("Election deleted.", "success");
-    renderAdminElections(document.getElementById("app-main"));
+    await api(`/admin/elections/${id}`, { method: "PUT", body });
+    toast("Election wing assignment updated.", "success");
   } catch (err) { toast(err.message, "error"); }
 }
 
@@ -633,18 +665,15 @@ async function manageElectionStructure(electionId) {
         <button class="btn-gold px-4" onclick="addPosition(${electionId})">Add</button>
       </div>
       <div id="positions-${electionId}" class="space-y-4">
-       ${election.positions.map(p => `
+        ${election.positions.map(p => `
           <div class="bg-white/70 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-2">
-              <p class="font-medium">${escapeHtml(p.title)}</p>
-              <button class="text-xs text-red-600 font-semibold" onclick="deletePosition(${p.id}, ${electionId})">Delete Position</button>
-            </div>
+            <p class="font-medium mb-2">${escapeHtml(p.title)}</p>
             <div class="flex gap-2 mb-2">
               <input id="cand-name-${p.id}" class="input-field text-sm" placeholder="Candidate name" />
               <button class="btn-gold px-4 text-sm" onclick="addCandidate(${p.id}, ${electionId})">Add</button>
             </div>
             <ul class="text-sm text-ink/70 list-disc pl-5">
-              ${p.candidates.map(c => `<li class="flex items-center justify-between gap-2">${escapeHtml(c.full_name)} <button class="text-xs text-red-600" onclick="deleteCandidate(${c.id}, ${electionId})">Delete</button></li>`).join("") || "<li>No candidates yet</li>"}
+              ${p.candidates.map(c => `<li>${escapeHtml(c.full_name)}</li>`).join("") || "<li>No candidates yet</li>"}
             </ul>
           </div>`).join("")}
       </div>
@@ -674,33 +703,20 @@ async function addCandidate(positionId, electionId) {
     manageElectionStructure(electionId);
   } catch (err) { toast(err.message, "error"); }
 }
-async function deletePosition(positionId, electionId) {
-  if (!confirm("Delete this position and all its candidates?")) return;
-  try {
-    await api(`/admin/positions/${positionId}`, { method: "DELETE" });
-    toast("Position deleted.", "success");
-    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
-    manageElectionStructure(electionId);
-  } catch (err) { toast(err.message, "error"); }
-}
-
-async function deleteCandidate(candidateId, electionId) {
-  if (!confirm("Delete this candidate?")) return;
-  try {
-    await api(`/admin/candidates/${candidateId}`, { method: "DELETE" });
-    toast("Candidate deleted.", "success");
-    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
-    manageElectionStructure(electionId);
-  } catch (err) { toast(err.message, "error"); }
-}
 
 async function renderAdminMembers(main) {
-  const members = await api("/admin/members");
+  const [members, wings] = await Promise.all([api("/admin/members"), fetchWings()]);
+
   main.innerHTML = `
     <section class="max-w-5xl mx-auto px-4 py-10 w-full">
       <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h2 class="font-display text-2xl font-bold">Registered Voters</h2>
-        <div class="flex gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <label class="text-sm text-ink/60">Filter by wing</label>
+          <select id="member-wing-filter" class="input-field !w-auto text-sm">
+            <option value="">All</option>
+            ${wings.map(w => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join("")}
+          </select>
           <label class="btn-gold px-4 py-2.5 cursor-pointer text-sm">
             <i class="fa-solid fa-file-csv mr-1"></i>Import CSV
             <input type="file" accept=".csv" class="hidden" id="csv-input" />
@@ -708,42 +724,63 @@ async function renderAdminMembers(main) {
           <button id="add-member-btn" class="btn-gold px-4 py-2.5 text-sm"><i class="fa-solid fa-user-plus mr-1"></i>Add Voter</button>
         </div>
       </div>
+      <p class="text-xs text-ink/50 mb-4">CSV imports need a <code>wing</code> column matching a wing's name (e.g. "Male Wing").</p>
       <div id="add-member-form" class="hidden glass-card p-6 mb-6 grid sm:grid-cols-2 gap-3">
         <input id="m-ssf-id" class="input-field" placeholder="SSF ID (e.g. SSF240010)" />
         <input id="m-name" class="input-field" placeholder="Full name" />
         <input id="m-cnic" class="input-field" placeholder="CNIC" />
         <input id="m-dept" class="input-field" placeholder="Department" />
+        <select id="m-wing" class="input-field sm:col-span-2">
+          <option value="">Select a wing…</option>
+          ${wings.map(w => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join("")}
+        </select>
         <button id="save-member-btn" class="btn-gold py-2.5 sm:col-span-2">Register Voter</button>
       </div>
       <div class="glass-card overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-ink text-white text-left">
-            <tr><th class="p-3">SSF ID</th><th class="p-3">Name</th><th class="p-3">Department</th><th class="p-3">Activated</th><th class="p-3">Role</th></tr>
+            <tr><th class="p-3">SSF ID</th><th class="p-3">Name</th><th class="p-3">Wing</th><th class="p-3">Department</th><th class="p-3">Activated</th><th class="p-3">Role</th></tr>
           </thead>
           <tbody id="members-tbody"></tbody>
         </table>
       </div>
     </section>`;
 
-  document.getElementById("members-tbody").innerHTML = members.map(m => `
-    <tr class="border-b border-ink/5">
-      <td class="p-3 font-mono">${escapeHtml(m.ssf_id)}</td>
-      <td class="p-3">${escapeHtml(m.full_name)}</td>
-      <td class="p-3">${escapeHtml(m.department || "—")}</td>
-      <td class="p-3">${m.account_activated ? '<i class="fa-solid fa-circle-check text-green-600"></i>' : '<i class="fa-solid fa-circle-xmark text-ink/30"></i>'}</td>
-      <td class="p-3 capitalize">${escapeHtml(m.role)}</td>
-      <td class="p-3">${["admin","super_admin"].includes(m.role) ? "—" : `<button class="text-xs text-red-600 font-semibold" onclick="deleteMember(${m.id})">Delete</button>`}</td>
-    </tr>`).join("") || `<tr><td class="p-6 text-center text-ink/50" colspan="6">No voters registered yet.</td></tr>`;
+  function renderRows(list) {
+    document.getElementById("members-tbody").innerHTML = list.map(m => `
+      <tr class="border-b border-ink/5">
+        <td class="p-3 font-mono">${escapeHtml(m.ssf_id)}</td>
+        <td class="p-3">${escapeHtml(m.full_name)}</td>
+        <td class="p-3">
+          <select class="input-field !w-auto text-xs" onchange="changeMemberWing(${m.id}, this.value)">
+            ${wings.map(w => `<option value="${w.id}" ${m.wing_id === w.id ? "selected" : ""}>${escapeHtml(w.name)}</option>`).join("")}
+          </select>
+        </td>
+        <td class="p-3">${escapeHtml(m.department || "—")}</td>
+        <td class="p-3">${m.account_activated ? '<i class="fa-solid fa-circle-check text-green-600"></i>' : '<i class="fa-solid fa-circle-xmark text-ink/30"></i>'}</td>
+        <td class="p-3 capitalize">${escapeHtml(m.role)}</td>
+      </tr>`).join("") || `<tr><td class="p-6 text-center text-ink/50" colspan="6">No voters registered yet.</td></tr>`;
+  }
+  renderRows(members);
+
+  document.getElementById("member-wing-filter").addEventListener("change", async (e) => {
+    const wingId = e.target.value;
+    const filtered = await api(`/admin/members${wingId ? `?wing_id=${wingId}` : ""}`);
+    renderRows(filtered);
+  });
 
   document.getElementById("add-member-btn").addEventListener("click", () => {
     document.getElementById("add-member-form").classList.toggle("hidden");
   });
   document.getElementById("save-member-btn").addEventListener("click", async () => {
+    const wingValue = document.getElementById("m-wing").value;
+    if (!wingValue) return toast("Please assign this voter to a wing.", "error");
     const body = {
       ssf_id: document.getElementById("m-ssf-id").value.trim(),
       full_name: document.getElementById("m-name").value.trim(),
       cnic: document.getElementById("m-cnic").value.trim(),
       department: document.getElementById("m-dept").value.trim(),
+      wing_id: Number(wingValue),
     };
     try {
       await api("/admin/members", { method: "POST", body });
@@ -759,17 +796,81 @@ async function renderAdminMembers(main) {
     try {
       const data = await api("/admin/members/import-csv", { method: "POST", body: form, isForm: true });
       toast(`Imported ${data.created} voters (${data.skipped} skipped).`, "success");
+      if (data.errors && data.errors.length) toast(`${data.errors.length} row(s) had issues — check console.`, "error");
+      if (data.errors && data.errors.length) console.warn("CSV import issues:", data.errors);
       renderAdminMembers(main);
     } catch (err) { toast(err.message, "error"); }
   });
 }
 
-async function deleteMember(memberId) {
-  if (!confirm("Delete this voter? This cannot be undone.")) return;
+async function changeMemberWing(memberId, wingId) {
+  if (!wingId) return;
   try {
-    await api(`/admin/members/${memberId}`, { method: "DELETE" });
-    toast("Voter deleted.", "success");
-    renderAdminMembers(document.getElementById("app-main"));
+    await api(`/admin/members/${memberId}`, { method: "PUT", body: { wing_id: Number(wingId) } });
+    toast("Voter's wing updated.", "success");
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function renderAdminWings(main) {
+  const wings = await fetchWings(true);
+  main.innerHTML = `
+    <section class="max-w-3xl mx-auto px-4 py-10 w-full">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="font-display text-2xl font-bold">Manage Wings</h2>
+        <button id="new-wing-btn" class="btn-gold px-5 py-2.5"><i class="fa-solid fa-plus mr-1"></i>New Wing</button>
+      </div>
+      <div id="new-wing-form" class="hidden glass-card p-6 mb-6">
+        <input id="new-wing-name" class="input-field mb-3" placeholder="Wing name (e.g. Male Wing)" />
+        <button id="create-wing-btn" class="btn-gold px-6 py-2.5">Create</button>
+      </div>
+      <div class="space-y-3" id="wings-list"></div>
+    </section>`;
+
+  document.getElementById("wings-list").innerHTML = wings.map(w => `
+    <div class="glass-card p-5 flex items-center justify-between gap-3" id="wing-row-${w.id}">
+      <div>
+        <p class="font-display font-semibold" id="wing-name-${w.id}">${escapeHtml(w.name)}</p>
+        <p class="text-xs text-ink/50">${w.member_count} voter(s) &middot; ${w.election_count} election(s)</p>
+      </div>
+      <div class="flex gap-2">
+        <button class="text-sm text-gold font-semibold" onclick="editWingName(${w.id})">Rename</button>
+        <button class="text-sm text-red-600 font-semibold" onclick="deleteWing(${w.id})">Delete</button>
+      </div>
+    </div>`).join("") || `<p class="text-ink/50 text-center py-10">No wings yet. Create one to get started.</p>`;
+
+  document.getElementById("new-wing-btn").addEventListener("click", () => {
+    document.getElementById("new-wing-form").classList.toggle("hidden");
+  });
+  document.getElementById("create-wing-btn").addEventListener("click", async () => {
+    const name = document.getElementById("new-wing-name").value.trim();
+    if (!name) return toast("Wing name is required.", "error");
+    try {
+      await api("/admin/wings", { method: "POST", body: { name } });
+      toast("Wing created.", "success");
+      renderAdminWings(main);
+    } catch (err) { toast(err.message, "error"); }
+  });
+}
+
+async function editWingName(wingId) {
+  const current = document.getElementById(`wing-name-${wingId}`).textContent;
+  const name = prompt("Rename wing:", current);
+  if (!name || !name.trim() || name.trim() === current) return;
+  try {
+    await api(`/admin/wings/${wingId}`, { method: "PUT", body: { name: name.trim() } });
+    toast("Wing renamed.", "success");
+    _wingsCache = null;
+    router();
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function deleteWing(wingId) {
+  if (!confirm("Delete this wing? This is only possible if no voters or elections are assigned to it.")) return;
+  try {
+    await api(`/admin/wings/${wingId}`, { method: "DELETE" });
+    toast("Wing deleted.", "success");
+    _wingsCache = null;
+    router();
   } catch (err) { toast(err.message, "error"); }
 }
 
@@ -781,7 +882,7 @@ async function renderAdminAudit(main) {
       <div class="glass-card overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-ink text-white text-left">
-           <tr><th class="p-3">Time</th><th class="p-3">Actor</th><th class="p-3">Action</th><th class="p-3">Status</th></tr>
+            <tr><th class="p-3">Time</th><th class="p-3">Actor</th><th class="p-3">Action</th><th class="p-3">Status</th></tr>
           </thead>
           <tbody>
             ${logs.map(l => `
