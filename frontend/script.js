@@ -190,12 +190,21 @@ function wingScopeOptionsHtml(wings, selectedWingId, selectedIsAllWings) {
 
 async function renderHome(main) {
   let electionBlock = `<div class="skeleton h-32 w-full max-w-md mx-auto"></div>`;
+  const authButtons = state.token ? "" : `
+    <div class="flex flex-wrap items-center justify-center gap-3 mb-8">
+      <a href="#login" class="btn-gold px-6 py-2.5">Login</a>
+      <a href="#activate" class="px-6 py-2.5 rounded-full border border-white/30 text-white hover:bg-white/10 transition">Activate Account</a>
+      <a href="#login" class="px-6 py-2.5 rounded-full border border-white/30 text-white/70 hover:bg-white/10 transition text-sm">
+        <i class="fa-solid fa-user-shield mr-1"></i>Admin Login
+      </a>
+    </div>`;
   main.innerHTML = `
     <section class="bg-ink text-white">
       <div class="max-w-5xl mx-auto px-4 py-20 text-center">
        <img src="ssf-logo.png" alt="SSF Logo" class="w-16 h-16 mx-auto rounded-full object-cover mb-6" />
         <h1 class="font-display text-3xl sm:text-5xl font-extrabold mb-3">Shikarpur Shagird Forum</h1>
         <p class="text-white/70 max-w-xl mx-auto mb-8">A secure, transparent, and modern platform for SSF elections — cast your vote from anywhere.</p>
+        ${authButtons}
         <div id="election-banner">${electionBlock}</div>
       </div>
     </section>
