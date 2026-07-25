@@ -709,7 +709,8 @@ async function renderAdminMembers(main) {
       <td class="p-3">${escapeHtml(m.department || "—")}</td>
       <td class="p-3">${m.account_activated ? '<i class="fa-solid fa-circle-check text-green-600"></i>' : '<i class="fa-solid fa-circle-xmark text-ink/30"></i>'}</td>
       <td class="p-3 capitalize">${escapeHtml(m.role)}</td>
-    </tr>`).join("") || `<tr><td class="p-6 text-center text-ink/50" colspan="5">No voters registered yet.</td></tr>`;
+      <td class="p-3">${["admin","super_admin"].includes(m.role) ? "—" : `<button class="text-xs text-red-600 font-semibold" onclick="deleteMember(${m.id})">Delete</button>`}</td>
+    </tr>`).join("") || `<tr><td class="p-6 text-center text-ink/50" colspan="6">No voters registered yet.</td></tr>`;
 
   document.getElementById("add-member-btn").addEventListener("click", () => {
     document.getElementById("add-member-form").classList.toggle("hidden");
@@ -740,6 +741,15 @@ async function renderAdminMembers(main) {
   });
 }
 
+async function deleteMember(memberId) {
+  if (!confirm("Delete this voter? This cannot be undone.")) return;
+  try {
+    await api(`/admin/members/${memberId}`, { method: "DELETE" });
+    toast("Voter deleted.", "success");
+    renderAdminMembers(document.getElementById("app-main"));
+  } catch (err) { toast(err.message, "error"); }
+}
+
 async function renderAdminAudit(main) {
   const logs = await api("/admin/audit-logs");
   main.innerHTML = `
@@ -748,7 +758,7 @@ async function renderAdminAudit(main) {
       <div class="glass-card overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-ink text-white text-left">
-            <tr><th class="p-3">Time</th><th class="p-3">Actor</th><th class="p-3">Action</th><th class="p-3">Status</th></tr>
+            <tr><th class="p-3">SSF ID</th><th class="p-3">Name</th><th class="p-3">Department</th><th class="p-3">Activated</th><th class="p-3">Role</th><th class="p-3">Actions</th></tr>
           </thead>
           <tbody>
             ${logs.map(l => `
