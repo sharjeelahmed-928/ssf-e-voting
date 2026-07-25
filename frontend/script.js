@@ -610,6 +610,8 @@ async function renderAdminElections(main) {
               ${["draft","upcoming","active","closed","archived"].map(s => `<option value="${s}" ${s === e.status ? "selected" : ""}>${s}</option>`).join("")}
             </select>
             <button class="text-sm text-gold font-semibold" onclick="manageElectionStructure(${e.id})">Positions &amp; Candidates</button>
+            <button class="text-sm text-gold font-semibold" onclick="editElectionDetails(${e.id})">Edit</button>
+            <button class="text-sm text-red-600 font-semibold" onclick="deleteElection(${e.id})">Delete</button>
           </div>
         </div>
         <div id="structure-${e.id}" class="mt-4 hidden"></div>
@@ -658,6 +660,31 @@ async function changeElectionWingScope(id, wingValue) {
   } catch (err) { toast(err.message, "error"); }
 }
 
+async function editElectionDetails(id) {
+  const elections = await api("/admin/elections");
+  const election = elections.find(e => e.id === id);
+  if (!election) return;
+  const title = prompt("Election title:", election.title);
+  if (title === null) return;
+  if (!title.trim()) return toast("Election title is required.", "error");
+  const description = prompt("Election description:", election.description || "");
+  if (description === null) return;
+  try {
+    await api(`/admin/elections/${id}`, { method: "PUT", body: { title: title.trim(), description: description.trim() } });
+    toast("Election updated.", "success");
+    router();
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function deleteElection(id) {
+  if (!confirm("Delete this election? This will also remove its positions and candidates. This cannot be undone.")) return;
+  try {
+    await api(`/admin/elections/${id}`, { method: "DELETE" });
+    toast("Election deleted.", "success");
+    router();
+  } catch (err) { toast(err.message, "error"); }
+}
+
 async function manageElectionStructure(electionId) {
   const container = document.getElementById(`structure-${electionId}`);
   container.classList.toggle("hidden");
@@ -676,13 +703,26 @@ async function manageElectionStructure(electionId) {
       <div id="positions-${electionId}" class="space-y-4">
         ${election.positions.map(p => `
           <div class="bg-white/70 rounded-lg p-4">
-            <p class="font-medium mb-2">${escapeHtml(p.title)}</p>
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <p class="font-medium" id="pos-name-${p.id}">${escapeHtml(p.title)}</p>
+              <div class="flex gap-2">
+                <button class="text-xs text-gold font-semibold" onclick="editPosition(${p.id}, ${electionId})">Rename</button>
+                <button class="text-xs text-red-600 font-semibold" onclick="deletePosition(${p.id}, ${electionId})">Delete</button>
+              </div>
+            </div>
             <div class="flex gap-2 mb-2">
               <input id="cand-name-${p.id}" class="input-field text-sm" placeholder="Candidate name" />
               <button class="btn-gold px-4 text-sm" onclick="addCandidate(${p.id}, ${electionId})">Add</button>
             </div>
-            <ul class="text-sm text-ink/70 list-disc pl-5">
-              ${p.candidates.map(c => `<li>${escapeHtml(c.full_name)}</li>`).join("") || "<li>No candidates yet</li>"}
+            <ul class="text-sm text-ink/70 space-y-1">
+              ${p.candidates.map(c => `
+                <li class="flex items-center justify-between gap-2">
+                  <span id="cand-display-${c.id}">${escapeHtml(c.full_name)}</span>
+                  <span class="flex gap-2 text-xs shrink-0">
+                    <button class="text-gold font-semibold" onclick="editCandidate(${c.id}, ${electionId})">Rename</button>
+                    <button class="text-red-600 font-semibold" onclick="deleteCandidate(${c.id}, ${electionId})">Delete</button>
+                  </span>
+                </li>`).join("") || "<li>No candidates yet</li>"}
             </ul>
           </div>`).join("")}
       </div>
@@ -708,6 +748,52 @@ async function addCandidate(positionId, electionId) {
   try {
     await api(`/admin/positions/${positionId}/candidates`, { method: "POST", body: { full_name } });
     toast("Candidate added.", "success");
+    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
+    manageElectionStructure(electionId);
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function editPosition(positionId, electionId) {
+  const el = document.getElementById(`pos-name-${positionId}`);
+  const current = el ? el.textContent : "";
+  const title = prompt("Rename position:", current);
+  if (!title || !title.trim() || title.trim() === current) return;
+  try {
+    await api(`/admin/positions/${positionId}`, { method: "PUT", body: { title: title.trim() } });
+    toast("Position renamed.", "success");
+    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
+    manageElectionStructure(electionId);
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function deletePosition(positionId, electionId) {
+  if (!confirm("Delete this position? All its candidates will be removed too.")) return;
+  try {
+    await api(`/admin/positions/${positionId}`, { method: "DELETE" });
+    toast("Position deleted.", "success");
+    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
+    manageElectionStructure(electionId);
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function editCandidate(candidateId, electionId) {
+  const el = document.getElementById(`cand-display-${candidateId}`);
+  const current = el ? el.textContent : "";
+  const full_name = prompt("Candidate name:", current);
+  if (!full_name || !full_name.trim() || full_name.trim() === current) return;
+  try {
+    await api(`/admin/candidates/${candidateId}`, { method: "PUT", body: { full_name: full_name.trim() } });
+    toast("Candidate updated.", "success");
+    document.getElementById(`structure-${electionId}`).dataset.loaded = "";
+    manageElectionStructure(electionId);
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function deleteCandidate(candidateId, electionId) {
+  if (!confirm("Remove this candidate?")) return;
+  try {
+    await api(`/admin/candidates/${candidateId}`, { method: "DELETE" });
+    toast("Candidate removed.", "success");
     document.getElementById(`structure-${electionId}`).dataset.loaded = "";
     manageElectionStructure(electionId);
   } catch (err) { toast(err.message, "error"); }
@@ -748,7 +834,7 @@ async function renderAdminMembers(main) {
       <div class="glass-card overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-ink text-white text-left">
-            <tr><th class="p-3">SSF ID</th><th class="p-3">Name</th><th class="p-3">Wing</th><th class="p-3">Department</th><th class="p-3">Activated</th><th class="p-3">Role</th></tr>
+            <tr><th class="p-3">SSF ID</th><th class="p-3">Name</th><th class="p-3">Wing</th><th class="p-3">Department</th><th class="p-3">Activated</th><th class="p-3">Role</th><th class="p-3">Actions</th></tr>
           </thead>
           <tbody id="members-tbody"></tbody>
         </table>
@@ -768,7 +854,13 @@ async function renderAdminMembers(main) {
         <td class="p-3">${escapeHtml(m.department || "—")}</td>
         <td class="p-3">${m.account_activated ? '<i class="fa-solid fa-circle-check text-green-600"></i>' : '<i class="fa-solid fa-circle-xmark text-ink/30"></i>'}</td>
         <td class="p-3 capitalize">${escapeHtml(m.role)}</td>
-      </tr>`).join("") || `<tr><td class="p-6 text-center text-ink/50" colspan="6">No voters registered yet.</td></tr>`;
+        <td class="p-3">
+          <div class="flex gap-2">
+            <button class="text-xs text-gold font-semibold" onclick="editMember(${m.id})">Edit</button>
+            <button class="text-xs text-red-600 font-semibold" onclick="deleteMember(${m.id})">Delete</button>
+          </div>
+        </td>
+      </tr>`).join("") || `<tr><td class="p-6 text-center text-ink/50" colspan="7">No voters registered yet.</td></tr>`;
   }
   renderRows(members);
 
@@ -817,6 +909,36 @@ async function changeMemberWing(memberId, wingId) {
   try {
     await api(`/admin/members/${memberId}`, { method: "PUT", body: { wing_id: Number(wingId) } });
     toast("Voter's wing updated.", "success");
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function editMember(memberId) {
+  const members = await api("/admin/members");
+  const m = members.find(x => x.id === memberId);
+  if (!m) return;
+  const full_name = prompt("Full name:", m.full_name);
+  if (full_name === null) return;
+  if (!full_name.trim()) return toast("Name is required.", "error");
+  const cnic = prompt("CNIC:", m.cnic || "");
+  if (cnic === null) return;
+  const department = prompt("Department:", m.department || "");
+  if (department === null) return;
+  try {
+    await api(`/admin/members/${memberId}`, {
+      method: "PUT",
+      body: { full_name: full_name.trim(), cnic: cnic.trim(), department: department.trim() },
+    });
+    toast("Voter updated.", "success");
+    router();
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function deleteMember(memberId) {
+  if (!confirm("Delete this voter? This cannot be undone.")) return;
+  try {
+    await api(`/admin/members/${memberId}`, { method: "DELETE" });
+    toast("Voter deleted.", "success");
+    router();
   } catch (err) { toast(err.message, "error"); }
 }
 
