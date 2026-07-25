@@ -500,59 +500,72 @@ async function submitVote(electionId) {
 
 async function renderResults(main, electionId) {
   main.innerHTML = `<div class="max-w-4xl mx-auto px-4 py-10 w-full"><div class="skeleton h-64 w-full"></div></div>`;
-  let id = electionId;
-  if (!id) {
-    // Fall back to whichever visible election (own wing or all-wings) is
-    // most recent, instead of assuming there's only ever one election.
-    // Admins aren't necessarily scoped to a single wing, so they need the
-    // full elections list rather than the voter-facing /elections/mine.
-    const isAdmin = state.member && ["admin", "super_admin"].includes(state.member.role);
-    const mine = isAdmin ? await api("/admin/elections") : await api("/elections/mine");
-    // Only fall back to a CLOSED election — results for an election that's
-    // still upcoming/active aren't final and shouldn't be shown as if they were.
-    const candidate = mine.find(e => e.status === "closed");
-    if (!candidate) {
-      main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">No election results are available.</div>`;
-      return;
-    }
-    id = candidate.id;
+
+  const isAdmin = state.member && ["admin", "super_admin"].includes(state.member.role);
+  const list = isAdmin ? await api("/admin/elections") : await api("/elections/mine");
+  let closedElections = list.filter(e => e.status === "closed" || e.status === "archived");
+
+  // If a specific election was requested (e.g. clicked from the dashboard),
+  // show just that one instead of the full list.
+  if (electionId) {
+    closedElections = closedElections.filter(e => String(e.id) === String(electionId));
+    if (!closedElections.length) closedElections = [{ id: Number(electionId) }];
   }
-  let data;
-  try {
-    data = await api(`/elections/${id}/results`);
-  } catch (err) {
-    main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">${escapeHtml(err.message)}</div>`;
+
+  if (!closedElections.length) {
+    main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">No election results are available yet.</div>`;
     return;
   }
+
   main.innerHTML = `
     <section class="max-w-4xl mx-auto px-4 py-10 w-full">
-      <h2 class="font-display text-2xl font-bold mb-6">${escapeHtml(data.title)} — Results</h2>
-      <div id="results-charts" class="grid sm:grid-cols-2 gap-6"></div>
+      <h2 class="font-display text-2xl font-bold mb-8">Election Results</h2>
+      <div id="results-container" class="space-y-12"></div>
     </section>`;
-  const container = document.getElementById("results-charts");
-  data.positions.forEach(pos => {
-    const card = document.createElement("div");
-    card.className = "glass-card p-6";
-    card.innerHTML = `<p class="font-display font-semibold mb-3">${escapeHtml(pos.title)}</p><canvas></canvas>`;
-    container.appendChild(card);
-    const ctx = card.querySelector("canvas").getContext("2d");
-    new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels: pos.candidates.map(c => c.full_name),
-        datasets: [{
-          label: "Votes",
-          data: pos.candidates.map(c => c.vote_count || 0),
-          backgroundColor: "#F5A300",
-          borderRadius: 6,
-        }],
-      },
-      options: {
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-      },
+  const container = document.getElementById("results-container");
+
+  for (const e of closedElections) {
+    let data;
+    try {
+      data = await api(`/elections/${e.id}/results`);
+    } catch (err) {
+      continue; // skip any election this member isn't allowed to view
+    }
+    const block = document.createElement("div");
+    block.innerHTML = `
+      <h3 class="font-display text-xl font-semibold mb-4">${escapeHtml(data.title)}</h3>
+      <div class="grid sm:grid-cols-2 gap-6"></div>`;
+    container.appendChild(block);
+    const grid = block.querySelector(".grid");
+
+    data.positions.forEach(pos => {
+      const card = document.createElement("div");
+      card.className = "glass-card p-6";
+      card.innerHTML = `<p class="font-display font-semibold mb-3">${escapeHtml(pos.title)}</p><canvas></canvas>`;
+      grid.appendChild(card);
+      const ctx = card.querySelector("canvas").getContext("2d");
+      new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: pos.candidates.map(c => c.full_name),
+          datasets: [{
+            label: "Votes",
+            data: pos.candidates.map(c => c.vote_count || 0),
+            backgroundColor: "#F5A300",
+            borderRadius: 6,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      });
     });
-  });
+  }
+
+  if (!container.children.length) {
+    container.innerHTML = `<p class="text-center text-ink/60">No election results are available yet.</p>`;
+  }
 }
 
 async function renderProfile(main) {
