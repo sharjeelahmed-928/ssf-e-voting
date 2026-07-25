@@ -169,9 +169,14 @@ async function renderHome(main) {
   main.innerHTML = `
     <section class="bg-ink text-white">
       <div class="max-w-5xl mx-auto px-4 py-20 text-center">
-       <img src="ssf-logo.png" alt="SSF Logo" class="w-16 h-16 mx-auto rounded-full object-cover mb-6" />
+      <img src="ssf-logo.png" alt="SSF Logo" class="w-16 h-16 mx-auto rounded-full object-cover mb-6" />
         <h1 class="font-display text-3xl sm:text-5xl font-extrabold mb-3">Shikarpur Shagird Forum</h1>
         <p class="text-white/70 max-w-xl mx-auto mb-8">A secure, transparent, and modern platform for SSF elections — cast your vote from anywhere.</p>
+        <div class="flex flex-wrap items-center justify-center gap-4 mb-10">
+          <a href="#login" class="btn-gold px-6 py-3 rounded-full font-semibold">Login</a>
+          <a href="#activate" class="px-6 py-3 rounded-full border-2 border-gold text-gold font-semibold hover:bg-gold hover:text-ink transition">Activate Your Account</a>
+          <a href="#login" class="px-6 py-3 rounded-full bg-white/10 text-white font-semibold hover:bg-white/20 transition">Admin Login</a>
+        </div>
         <div id="election-banner">${electionBlock}</div>
       </div>
     </section>
