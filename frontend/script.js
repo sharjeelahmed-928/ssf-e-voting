@@ -370,9 +370,30 @@ async function renderDashboard(main) {
     </section>`;
   const content = document.getElementById("dash-content");
   if (!data.election) {
-    content.innerHTML = `<div class="glass-card p-8 text-center text-ink/60">No active election is available right now.</div>`;
+    try {
+        const latest = await api("/elections/latest-closed");
+
+        if (latest.election) {
+            content.innerHTML = `
+            <div class="glass-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <p class="font-display font-semibold text-lg">${escapeHtml(latest.election.title)}</p>
+                    <p class="text-sm text-ink/60">Election Closed</p>
+                </div>
+                <button class="btn-gold px-6 py-2.5"
+                    onclick="navigate('results',{id:${latest.election.id}})">
+                    View Results
+                </button>
+            </div>`;
+            return;
+        }
+    } catch (_) {}
+
+    content.innerHTML = `<div class="glass-card p-8 text-center text-ink/60">
+        No active election is available right now.
+    </div>`;
     return;
-  }
+}
   const e = data.election;
   const statusLabel = { active: "Voting Open", upcoming: "Upcoming", closed: "Election has ended." }[e.status] || e.status;
   content.innerHTML = `
@@ -469,13 +490,15 @@ async function renderResults(main, electionId) {
   main.innerHTML = `<div class="max-w-4xl mx-auto px-4 py-10 w-full"><div class="skeleton h-64 w-full"></div></div>`;
   let id = electionId;
   if (!id) {
-    const pub = await api("/elections/public");
-    if (!pub.election) {
-      main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">No election results are available.</div>`;
-      return;
-    }
-    id = pub.election.id;
+  const latest = await api("/elections/latest-closed");
+
+  if (!latest.election) {
+    main.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-16 text-center text-ink/60">No election results are available.</div>`;
+    return;
   }
+
+  id = latest.election.id;
+}
   let data;
   try {
     data = await api(`/elections/${id}/results`);
